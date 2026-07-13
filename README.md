@@ -39,12 +39,12 @@ enviar comandos de calibracion solo con el auto en estado seguro (sin torque hab
 | `cmd_id` | Accion |
 | ---: | --- |
 | `0` | Sin accion |
-| `1` | Calibracion de corrientes (offset) y freno trasero |
-| `2` | Reservado |
-| `3` | Reservado |
-| `4` | Reservado |
-| `5` | Reservado |
-| `6` | Reservado |
+| `1` | Calibracion TPS 0% |
+| `2` | Calibracion TPS 100% |
+| `3` | Calibracion izquierda volante |
+| `4` | Calibracion centro volante |
+| `5` | Calibracion derecha volante |
+| `6` | Calibracion sensores de corriente |
 
 ## ADC2CAN Trasera
 

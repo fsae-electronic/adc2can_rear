@@ -222,11 +222,13 @@ void process_calibration_command(void)
     switch(calibration_cmd_id)
     {
         case CAL_CMD_TPS_0:
+            sensors_data.rear_brake_data.calibration_brake_value = sensors_data.rear_brake_data.rear_brake_raw_value;
+            break;
+        case CAL_CMD_CURRENT_SENSORS:
             sensors_data.ac_drv1_data.calibration_current_value = sensors_data.ac_drv1_data.current_vo_raw_value;
             sensors_data.dc_drv1_data.calibration_current_value = sensors_data.dc_drv1_data.current_vo_raw_value;
             sensors_data.ac_drv2_data.calibration_current_value = sensors_data.ac_drv2_data.current_vo_raw_value;
             sensors_data.dc_drv2_data.calibration_current_value = sensors_data.dc_drv2_data.current_vo_raw_value;
-            sensors_data.rear_brake_data.calibration_brake_value = sensors_data.rear_brake_data.rear_brake_raw_value;
             break;
         default:
             break;

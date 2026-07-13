@@ -50,6 +50,24 @@
 #include "sys_common.h"
 
 /* USER CODE BEGIN (1) */
+#include "sys_core.h"
+#include "system.h"
+
+#include "sci.h"
+#include "rti.h"
+#include "can.h"
+
+#include "sensors.h"
+
+#define CLOCK_RTI_HZ 10000000 
+
+// CAN data sending frequency over CAN bus
+#define DATA_PROCESS_HZ 250
+#define DATA_PROCESS_TICKS (CLOCK_RTI_HZ / DATA_PROCESS_HZ)
+
+// Serial data sending frequency over SCI
+#define DATA_SEND_HZ 100
+#define DATA_SEND_TICKS (CLOCK_RTI_HZ / DATA_SEND_HZ)
 /* USER CODE END */
 
 /** @fn void main(void)
@@ -61,11 +79,35 @@
 */
 
 /* USER CODE BEGIN (2) */
+char sciBuffer[64];
 /* USER CODE END */
 
 int main(void)
 {
 /* USER CODE BEGIN (3) */
+    _enable_interrupt_();
+
+    sciInit();
+    sciSetBaudrate(sciREG, 115200);
+
+    canInit();
+
+    init_sensors();
+
+
+    rtiSetPeriod(rtiCOMPARE2, DATA_PROCESS_TICKS);
+    rtiEnableNotification(rtiNOTIFICATION_COMPARE2);
+
+    rtiSetPeriod(rtiCOMPARE3, DATA_SEND_TICKS);
+    rtiEnableNotification(rtiNOTIFICATION_COMPARE3);
+    
+
+
+    rtiStartCounter(rtiCOUNTER_BLOCK1);
+    while(1)
+    {
+        // Main loop can be used for other tasks if needed
+    }
 /* USER CODE END */
 
     return 0;
@@ -73,4 +115,33 @@ int main(void)
 
 
 /* USER CODE BEGIN (4) */
+void rtiNotification(uint32 notification)
+{
+    if (notification == rtiNOTIFICATION_COMPARE2)
+    {
+        convert_data();
+        process_calibration_command();
+    }
+    else if (notification == rtiNOTIFICATION_COMPARE3)
+    {
+        send_data_to_serial();
+        send_data_to_can();
+    }   
+}
+
+void canMessageNotification(canBASE_t *node, uint32 messageBox)
+{
+    if(node == canREG1)
+    {
+        switch(messageBox)
+        {
+            case canMESSAGE_BOX1: // RX: 0x600 -> Calibration command DLC = 1
+                canGetData(canREG1, canMESSAGE_BOX1, &calibration_cmd_id);
+                break;
+            default:
+                // Handle other message boxes if needed
+                break;
+        }
+    }
+}
 /* USER CODE END */

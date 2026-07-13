@@ -90,13 +90,13 @@ void sciInit(void)
     sciREG->GCR1 =  (uint32)((uint32)1U << 25U)  /* enable transmit */
                   | (uint32)((uint32)1U << 24U)  /* enable receive */
                   | (uint32)((uint32)1U << 5U)   /* internal clock (device has no clock pin) */
-                  | (uint32)((uint32)(2U-1U) << 4U)  /* number of stop bits */
+                  | (uint32)((uint32)(1U-1U) << 4U)  /* number of stop bits */
                   | (uint32)((uint32)0U << 3U)  /* even parity, otherwise odd */
                   | (uint32)((uint32)0U << 2U)  /* enable parity */
                   | (uint32)((uint32)1U << 1U);  /* asynchronous timing mode */
 
     /** - set baudrate */
-    sciREG->BRS = 520U;  /* baudrate */
+    sciREG->BRS = 42U;  /* baudrate */
 
     /** - transmission length */
     sciREG->FORMAT = 8U - 1U;  /* length */
@@ -661,6 +661,87 @@ void sciGetConfigValue(sci_config_reg_t *config_reg, config_value_type_t type)
 	}
 }
 
+
+/* USER CODE BEGIN (27) */
+/* USER CODE END */
+
+/** @fn void sciHighLevelInterrupt(void)
+*   @brief Level 0 Interrupt for SCI
+*/
+#pragma CODE_STATE(sciHighLevelInterrupt, 32)
+#pragma INTERRUPT(sciHighLevelInterrupt, IRQ)
+
+/* SourceId : SCI_SourceId_018 */
+/* DesignId : SCI_DesignId_017 */
+/* Requirements : HL_SR245, HL_SR246 */
+void sciHighLevelInterrupt(void)
+{
+    uint32 vec = sciREG->INTVECT0;
+	uint8 byte;
+/* USER CODE BEGIN (28) */
+/* USER CODE END */
+
+    switch (vec)
+    {
+    case 1U:
+        sciNotification(sciREG, (uint32)SCI_WAKE_INT);
+        break;
+    case 3U:
+        sciNotification(sciREG, (uint32)SCI_PE_INT);
+        break;
+    case 6U:
+        sciNotification(sciREG, (uint32)SCI_FE_INT);
+        break;
+    case 7U:
+        sciNotification(sciREG, (uint32)SCI_BREAK_INT);
+        break;
+    case 9U:
+        sciNotification(sciREG, (uint32)SCI_OE_INT);
+        break;
+
+    case 11U:
+        /* receive */
+         byte = (uint8)(sciREG->RD & 0x000000FFU);
+
+            if (g_sciTransfer_t[0U].rx_length > 0U)
+            {
+                *g_sciTransfer_t[0U].rx_data = byte;
+                /*SAFETYMCUSW 567 S MR:17.1,17.4 <APPROVED> "Pointer increment needed" */
+				g_sciTransfer_t[0U].rx_data++;
+                g_sciTransfer_t[0U].rx_length--;
+                if (g_sciTransfer_t[0U].rx_length == 0U)
+                {
+                    sciNotification(sciREG, (uint32)SCI_RX_INT);
+                }
+            }
+        break;
+
+    case 12U:
+        /* transmit */
+		/*SAFETYMCUSW 30 S MR:12.2,12.3 <APPROVED> "Used for data count in Transmit/Receive polling and Interrupt mode" */
+		--g_sciTransfer_t[0U].tx_length;
+        if (g_sciTransfer_t[0U].tx_length > 0U)
+        {
+			uint8 txdata = *g_sciTransfer_t[0U].tx_data;
+            sciREG->TD = (uint32)(txdata);
+            /*SAFETYMCUSW 567 S MR:17.1,17.4 <APPROVED> "Pointer increment needed" */
+			g_sciTransfer_t[0U].tx_data++;
+        }
+        else
+        {
+            sciREG->CLEARINT = (uint32)SCI_TX_INT;
+            sciNotification(sciREG, (uint32)SCI_TX_INT);
+        }
+        break;
+
+    default:
+        /* phantom interrupt, clear flags and return */
+        sciREG->FLR = ~sciREG->SETINTLVL & 0x07000303U;
+        break;
+    }
+/* USER CODE BEGIN (29) */
+/* USER CODE END */
+}
 
 
 /* USER CODE BEGIN (37) */

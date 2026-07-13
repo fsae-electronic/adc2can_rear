@@ -73,22 +73,22 @@ void ecapInit(void)
     *     - Enable/Disable loading on a capture event
     *     - Setup Event Filter prescale
     */
-    ecapREG1->ECCTL1 = ((uint16)((uint16)RISING_EDGE << 0U)        /* Capture Event 1 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 1U)   /* Counter Reset on Capture Event 1 */
-                      | (uint16)((uint16)RISING_EDGE << 2U)        /* Capture Event 2 Polarity */
+    ecapREG1->ECCTL1 = ((uint16)((uint16)FALLING_EDGE << 0U)        /* Capture Event 1 Polarity */
+                      | (uint16)((uint16)RESET_ENABLE << 1U)   /* Counter Reset on Capture Event 1 */
+                      | (uint16)((uint16)FALLING_EDGE << 2U)        /* Capture Event 2 Polarity */
                       | (uint16)((uint16)RESET_DISABLE << 3U)   /* Counter Reset on Capture Event 2 */
-                      | (uint16)((uint16)RISING_EDGE << 4U)        /* Capture Event 3 Polarity */
+                      | (uint16)((uint16)FALLING_EDGE << 4U)        /* Capture Event 3 Polarity */
                       | (uint16)((uint16)RESET_DISABLE << 5U)   /* Counter Reset on Capture Event 3 */
-                      | (uint16)((uint16)RISING_EDGE << 6U)        /* Capture Event 4 Polarity */
+                      | (uint16)((uint16)FALLING_EDGE << 6U)        /* Capture Event 4 Polarity */
                       | (uint16)((uint16)RESET_DISABLE << 7U)   /* Counter Reset on Capture Event 4 */
-                      | (uint16)((uint16)0U << 8U)            /* Enable/Disable loading on a capture event */
+                      | (uint16)((uint16)1U << 8U)            /* Enable/Disable loading on a capture event */
                       | (uint16)((uint16)0U << 9U));      /* Setup Event Filter prescale */
     
     /** - Setup control register 2
     *     - Set operating mode
     *     - Set Stop/Wrap after capture
     */
-    ecapREG1->ECCTL2 = (uint16)((uint16)ONE_SHOT << 0U)      /* Capture Mode */
+    ecapREG1->ECCTL2 = (uint16)((uint16)CONTINUOUS << 0U)      /* Capture Mode */
                      | (uint16)((uint16)CAPTURE_EVENT1 << 1U)       /* Stop/Wrap value */
                      | (uint16)((uint16)0U << 9U)      /* Enable/Disable APWM mode */
                      | (uint16)0x00000010U;      /* Start counter */
@@ -96,7 +96,7 @@ void ecapInit(void)
     
 
     /** - Set interrupt enable */
-     ecapREG1->ECEINT = 0x0000U    /* Enable/Disable Capture Event 1 Interrupt  */
+     ecapREG1->ECEINT = 0x0002U    /* Enable/Disable Capture Event 1 Interrupt  */
                       | 0x0000U    /* Enable/Disable Capture Event 2 Interrupt  */
                       | 0x0000U    /* Enable/Disable Capture Event 3 Interrupt  */
                       | 0x0000U    /* Enable/Disable Capture Event 4 Interrupt  */
@@ -111,15 +111,15 @@ void ecapInit(void)
     *     - Enable/Disable loading on a capture event
     *     - Setup Event Filter prescale
     */
-    ecapREG2->ECCTL1 = ((uint16)((uint16)RISING_EDGE << 0U)        /* Capture Event 1 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 1U)   /* Counter Reset on Capture Event 1 */
-                      | (uint16)((uint16)RISING_EDGE << 2U)        /* Capture Event 2 Polarity */
+    ecapREG2->ECCTL1 = ((uint16)((uint16)FALLING_EDGE << 0U)        /* Capture Event 1 Polarity */
+                      | (uint16)((uint16)RESET_ENABLE << 1U)   /* Counter Reset on Capture Event 1 */
+                      | (uint16)((uint16)FALLING_EDGE << 2U)        /* Capture Event 2 Polarity */
                       | (uint16)((uint16)RESET_DISABLE << 3U)   /* Counter Reset on Capture Event 2 */
-                      | (uint16)((uint16)RISING_EDGE << 4U)        /* Capture Event 3 Polarity */
+                      | (uint16)((uint16)FALLING_EDGE << 4U)        /* Capture Event 3 Polarity */
                       | (uint16)((uint16)RESET_DISABLE << 5U)   /* Counter Reset on Capture Event 3 */
-                      | (uint16)((uint16)RISING_EDGE << 6U)        /* Capture Event 4 Polarity */
+                      | (uint16)((uint16)FALLING_EDGE << 6U)        /* Capture Event 4 Polarity */
                       | (uint16)((uint16)RESET_DISABLE << 7U)   /* Counter Reset on Capture Event 4 */
-                      | (uint16)((uint16)0U << 8U)            /* Enable/Disable loading on a capture event */
+                      | (uint16)((uint16)1U << 8U)            /* Enable/Disable loading on a capture event */
                       | (uint16)((uint16)0U << 9U));      /* Setup Event Filter prescale */
 
                     
@@ -135,163 +135,7 @@ void ecapInit(void)
     
 
     /** - Set interrupt enable */
-     ecapREG2->ECEINT = 0x0000U    /* Enable/Disable Capture Event 1 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 2 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 3 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 4 Interrupt  */
-                      | 0x0000U    /* Enable/Disable counter Overflow Interrupt */
-                      | 0x0000U    /* Enable/Disable Period Equal Interrupt     */
-                      | 0x0000U;   /* Enable/Disable Compare Equal Interrupt    */
-
-    /** @b initialize @b ECAP3 */
-
-    /** - Setup control register 1 
-    *     - Set polarity and reset enable for Capture Events 1-4
-    *     - Enable/Disable loading on a capture event
-    *     - Setup Event Filter prescale
-    */
-    ecapREG3->ECCTL1 = ((uint16)((uint16)RISING_EDGE << 0U)        /* Capture Event 1 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 1U)   /* Counter Reset on Capture Event 1 */
-                      | (uint16)((uint16)RISING_EDGE << 2U)        /* Capture Event 2 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 3U)   /* Counter Reset on Capture Event 2 */
-                      | (uint16)((uint16)RISING_EDGE << 4U)        /* Capture Event 3 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 5U)   /* Counter Reset on Capture Event 3 */
-                      | (uint16)((uint16)RISING_EDGE << 6U)        /* Capture Event 4 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 7U)   /* Counter Reset on Capture Event 4 */
-                      | (uint16)((uint16)0U << 8U)            /* Enable/Disable loading on a capture event */
-                      | (uint16)((uint16)0U << 9U));      /* Setup Event Filter prescale */
-
-                    
-    /** - Setup control register 2
-    *     - Set operating mode
-    *     - Set Stop/Wrap after capture
-    */
-    ecapREG3->ECCTL2 = (uint16)((uint16)ONE_SHOT << 0U)      /* Capture Mode */
-                     | (uint16)((uint16)CAPTURE_EVENT1 << 1U)       /* Stop/Wrap value */
-                     | (uint16)((uint16)0U << 9U)      /* Enable/Disable APWM mode */
-                     | (uint16)0x00000010U;      /* Start counter */
-    
-    
-
-    /** - Set interrupt enable */
-     ecapREG3->ECEINT = 0x0000U    /* Enable/Disable Capture Event 1 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 2 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 3 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 4 Interrupt  */
-                      | 0x0000U    /* Enable/Disable counter Overflow Interrupt */
-                      | 0x0000U    /* Enable/Disable Period Equal Interrupt     */
-                      | 0x0000U;   /* Enable/Disable Compare Equal Interrupt    */
-
-    /** @b initialize @b ECAP4 */
-
-    /** - Setup control register 1 
-    *     - Set polarity and reset enable for Capture Events 1-4
-    *     - Enable/Disable loading on a capture event
-    *     - Setup Event Filter prescale
-    */
-    ecapREG4->ECCTL1 = ((uint16)((uint16)RISING_EDGE << 0U)        /* Capture Event 1 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 1U)   /* Counter Reset on Capture Event 1 */
-                      | (uint16)((uint16)RISING_EDGE << 2U)        /* Capture Event 2 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 3U)   /* Counter Reset on Capture Event 2 */
-                      | (uint16)((uint16)RISING_EDGE << 4U)        /* Capture Event 3 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 5U)   /* Counter Reset on Capture Event 3 */
-                      | (uint16)((uint16)RISING_EDGE << 6U)        /* Capture Event 4 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 7U)   /* Counter Reset on Capture Event 4 */
-                      | (uint16)((uint16)0U << 8U)            /* Enable/Disable loading on a capture event */
-                      | (uint16)((uint16)0U << 9U));      /* Setup Event Filter prescale */
-
-                    
-    /** - Setup control register 2
-    *     - Set operating mode
-    *     - Set Stop/Wrap after capture
-    */
-    ecapREG4->ECCTL2 = (uint16)((uint16)ONE_SHOT << 0U)      /* Capture Mode */
-                     | (uint16)((uint16)CAPTURE_EVENT1 << 1U)       /* Stop/Wrap value */
-                     | (uint16)((uint16)0U << 9U)      /* Enable/Disable APWM mode */
-                     | (uint16)0x00000010U;      /* Start counter */
-    
-    
-
-    /** - Set interrupt enable */
-     ecapREG4->ECEINT = 0x0000U    /* Enable/Disable Capture Event 1 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 2 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 3 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 4 Interrupt  */
-                      | 0x0000U    /* Enable/Disable counter Overflow Interrupt */
-                      | 0x0000U    /* Enable/Disable Period Equal Interrupt     */
-                      | 0x0000U;   /* Enable/Disable Compare Equal Interrupt    */
-
-    /** @b initialize @b ECAP5 */
-
-    /** - Setup control register 1 
-    *     - Set polarity and reset enable for Capture Events 1-4
-    *     - Enable/Disable loading on a capture event
-    *     - Setup Event Filter prescale
-    */
-    ecapREG5->ECCTL1 = ((uint16)((uint16)RISING_EDGE << 0U)        /* Capture Event 1 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 1U)   /* Counter Reset on Capture Event 1 */
-                      | (uint16)((uint16)RISING_EDGE << 2U)        /* Capture Event 2 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 3U)   /* Counter Reset on Capture Event 2 */
-                      | (uint16)((uint16)RISING_EDGE << 4U)        /* Capture Event 3 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 5U)   /* Counter Reset on Capture Event 3 */
-                      | (uint16)((uint16)RISING_EDGE << 6U)        /* Capture Event 4 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 7U)   /* Counter Reset on Capture Event 4 */
-                      | (uint16)((uint16)0U << 8U)            /* Enable/Disable loading on a capture event */
-                      | (uint16)((uint16)0U << 9U));      /* Setup Event Filter prescale */
-
-                    
-    /** - Setup control register 2
-    *     - Set operating mode
-    *     - Set Stop/Wrap after capture
-    */
-    ecapREG5->ECCTL2 = (uint16)((uint16)ONE_SHOT << 0U)      /* Capture Mode */
-                     | (uint16)((uint16)CAPTURE_EVENT1 << 1U)       /* Stop/Wrap value */
-                     | (uint16)((uint16)0U << 9U)      /* Enable/Disable APWM mode */
-                     | (uint16)0x00000010U;      /* Start counter */
-    
-    
-
-    /** - Set interrupt enable */
-     ecapREG5->ECEINT = 0x0000U    /* Enable/Disable Capture Event 1 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 2 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 3 Interrupt  */
-                      | 0x0000U    /* Enable/Disable Capture Event 4 Interrupt  */
-                      | 0x0000U    /* Enable/Disable counter Overflow Interrupt */
-                      | 0x0000U    /* Enable/Disable Period Equal Interrupt     */
-                      | 0x0000U;   /* Enable/Disable Compare Equal Interrupt    */
-
-    /** @b initialize @b ECAP6 */
-
-    /** - Setup control register 1 
-    *     - Set polarity and reset enable for Capture Events 1-4
-    *     - Enable/Disable loading on a capture event
-    *     - Setup Event Filter prescale
-    */
-    ecapREG6->ECCTL1 = ((uint16)((uint16)RISING_EDGE << 0U)        /* Capture Event 1 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 1U)   /* Counter Reset on Capture Event 1 */
-                      | (uint16)((uint16)RISING_EDGE << 2U)        /* Capture Event 2 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 3U)   /* Counter Reset on Capture Event 2 */
-                      | (uint16)((uint16)RISING_EDGE << 4U)        /* Capture Event 3 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 5U)   /* Counter Reset on Capture Event 3 */
-                      | (uint16)((uint16)RISING_EDGE << 6U)        /* Capture Event 4 Polarity */
-                      | (uint16)((uint16)RESET_DISABLE << 7U)   /* Counter Reset on Capture Event 4 */
-                      | (uint16)((uint16)0U << 8U)            /* Enable/Disable loading on a capture event */
-                      | (uint16)((uint16)0U << 9U));      /* Setup Event Filter prescale */
-
-                    
-    /** - Setup control register 2
-    *     - Set operating mode
-    *     - Set Stop/Wrap after capture
-    */
-    ecapREG6->ECCTL2 = (uint16)((uint16)ONE_SHOT << 0U)        /* Capture Mode */
-                     | (uint16)((uint16)CAPTURE_EVENT1 << 1U)       /* Stop/Wrap value */
-                     | (uint16)((uint16)0U << 9U)      /* Enable/Disable APWM mode */
-                     | (uint16)0x00000010U;      /* Start counter */
-    
-    
-
-    /** - Set interrupt enable */
-     ecapREG6->ECEINT = 0x0000U    /* Enable/Disable Capture Event 1 Interrupt  */
+     ecapREG2->ECEINT = 0x0002U    /* Enable/Disable Capture Event 1 Interrupt  */
                       | 0x0000U    /* Enable/Disable Capture Event 2 Interrupt  */
                       | 0x0000U    /* Enable/Disable Capture Event 3 Interrupt  */
                       | 0x0000U    /* Enable/Disable Capture Event 4 Interrupt  */
@@ -971,6 +815,77 @@ void ecap6GetConfigValue(ecap_config_reg_t *config_reg, config_value_type_t type
 	}
 }
 
+/** @fn void ecap1Interrupt(void)
+*   @brief eCAP1 Interrupt Handler
+*
+*   Interrupt handler for eCAP1 interrupt 
+*
+*/
+#pragma CODE_STATE(ecap1Interrupt, 32)
+#pragma INTERRUPT(ecap1Interrupt, IRQ)
+
+/* SourceId : ECAP_SourceId_032 */
+/* DesignId : ECAP_DesignId_021 */
+/* Requirements : HL_ECAP_SR15 */
+void ecap1Interrupt(void)
+{
+    uint16 Int_Flag = ecapREG1->ECFLG & ecapREG1->ECEINT;
+    
+/* USER CODE BEGIN (2) */
+/* USER CODE END */
+
+    /* Clear Events, */
+    /* Note : Current Implementation clears multiple all events set
+       before this point, User notification function is called with Flags and user must take care of handling */    
+    ecapREG1->ECCLR = Int_Flag;
+    
+    /* Clears the interrupt flag and enables further interrupts to be generated
+       if an event flags is set to 1. */
+    ecapREG1->ECCLR = 1U;
+    
+    /* Passing the Interrupt Flag to the user Notification Function */
+    ecapNotification(ecapREG1,Int_Flag);
+
+/* USER CODE BEGIN (3) */
+/* USER CODE END */
+
+}
+
+/** @fn void ecap2Interrupt(void)
+*   @brief eCAP2 Interrupt Handler
+*
+*   Interrupt handler for eCAP2 interrupt 
+*
+*/
+#pragma CODE_STATE(ecap2Interrupt, 32)
+#pragma INTERRUPT(ecap2Interrupt, IRQ)
+
+/* SourceId : ECAP_SourceId_033 */
+/* DesignId : ECAP_DesignId_021 */
+/* Requirements : HL_ECAP_SR15 */
+void ecap2Interrupt(void)
+{
+    uint16 Int_Flag = ecapREG2->ECFLG & ecapREG2->ECEINT;
+
+/* USER CODE BEGIN (4) */
+/* USER CODE END */
+
+    /* Clear Events, */
+    /* Note : Current Implementation clears multiple all events set
+       before this point, User notification function is called with Flags and user must take care of handling */    
+    ecapREG2->ECCLR = Int_Flag;
+    
+    /* Clears the interrupt flag and enables further interrupts to be generated
+       if an event flags is set to 1. */
+    ecapREG2->ECCLR = 1U;
+    
+    /* Passing the Interrupt Flag to the user Notification Function */
+    ecapNotification(ecapREG2,Int_Flag);
+
+/* USER CODE BEGIN (5) */
+/* USER CODE END */
+
+}
 
 
 /*end of file*/

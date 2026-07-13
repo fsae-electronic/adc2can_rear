@@ -61,11 +61,11 @@
 
 #define CLOCK_RTI_HZ 10000000 
 
-// CAN data sending frequency over CAN bus
+// Data conversion and processing frequency
 #define DATA_PROCESS_HZ 250
 #define DATA_PROCESS_TICKS (CLOCK_RTI_HZ / DATA_PROCESS_HZ)
 
-// Serial data sending frequency over SCI
+// CAN and SCI data sending frequency
 #define DATA_SEND_HZ 100
 #define DATA_SEND_TICKS (CLOCK_RTI_HZ / DATA_SEND_HZ)
 /* USER CODE END */
@@ -79,7 +79,6 @@
 */
 
 /* USER CODE BEGIN (2) */
-char sciBuffer[64];
 /* USER CODE END */
 
 int main(void)

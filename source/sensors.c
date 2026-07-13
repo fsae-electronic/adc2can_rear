@@ -231,6 +231,7 @@ void process_calibration_command(void)
             sensors_data.dc_drv2_data.calibration_current_value = sensors_data.dc_drv2_data.current_vo_raw_value;
             break;
         default:
+            return; // Ignore unknown commands
             break;
     }
 

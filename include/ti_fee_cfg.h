@@ -87,7 +87,7 @@
 /* SourceId : HL_Fee_SourceId_31 */
 /* DesignId : HL_FEE_DesignId_4 */
 /* Requirements : HL_FEE_SR84 */
-#define TI_FEE_OPERATING_FREQUENCY                         160.000F
+#define TI_FEE_OPERATING_FREQUENCY                         40.000F
 
 /** @def FEE_FLASH_ERROR_CORRECTION_ENABLE
 *   @brief Alias name for FEE Error Correction Enable

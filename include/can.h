@@ -637,7 +637,7 @@ typedef struct can_config_reg
 #define CAN1_BTR_CONFIGVALUE      ((uint32)((uint32)0U << 16U) \
                                  | (uint32)((uint32)(1U - 1U) << 12U) \
                                  | (uint32)((uint32)((7U + 1U) - 1U) << 8U) \
-                                 | (uint32)((uint32)(1U - 1U) << 6U) | (uint32)7U)
+                                 | (uint32)((uint32)(1U - 1U) << 6U) | (uint32)1U)
 #define CAN1_TEST_CONFIGVALUE       0x00000080U 
 #define CAN1_ABOTR_CONFIGVALUE    ((uint32)(0U))
 #define CAN1_INTMUX0_CONFIGVALUE  ((uint32)0x00000000U \

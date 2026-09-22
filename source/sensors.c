@@ -12,9 +12,9 @@ uint8_t calibration_cmd_id = CAL_CMD_NONE;
 
 uint16_t current_vref_raw_value;
 
-
-//Calibration values to save on EPROM
-struct EEPROM_data{
+// Calibration values to save on EPROM
+struct EEPROM_data
+{
     union
     {
         uint8_t raw[12];
@@ -39,16 +39,17 @@ static uint16_t convert_voltage2current(current_data_t *current_data)
     uint16_t i;
     uint16_t index;
 
-    // Convert both ADC readings to sensor-side voltage (before 2/3 divider).
-    float vref = ((float)current_vref_raw_value / ADC_RESOLUTION) * ADC_VREF * ADC_GAIN;
-    float vo = ((float)current_data->current_vo_raw_value / ADC_RESOLUTION) * ADC_VREF * ADC_GAIN;
-    float current = (vo - vref) / SENSITIVITY;
+    // Raw ADC diff (vo - vref) with calibration offset removed, so current reads 0 when calibrated.
+    int16_t raw_diff = (int16_t)current_data->current_vo_raw_value - (int16_t)current_vref_raw_value
+        - (int16_t)current_data->calibration_current_value;
+
+    float current = (((float)raw_diff / ADC_RESOLUTION) * ADC_VREF * ADC_GAIN) / SENSITIVITY;
 
     index = (uint16_t)(current_data->buffer_index % SAMPLES);
     current_data->current_buffer[index] = current;
     current_data->buffer_index = (uint16_t)((index + 1U) % SAMPLES);
 
-    for(i = 0U; i < SAMPLES; i++)
+    for (i = 0U; i < SAMPLES; i++)
     {
         sum_squares += current_data->current_buffer[i] * current_data->current_buffer[i];
     }
@@ -60,7 +61,6 @@ static uint16_t convert_voltage2current(current_data_t *current_data)
     return current_data->current_value_rms;
 }
 
-
 /********************************
  * Static Functions
  *******************************/
@@ -69,14 +69,13 @@ bool load_e_from_eeprom()
 {
     struct EEPROM_data e;
 
-    //Read the data from EEPROM
     while(TI_Fee_GetStatus(0) != IDLE)
     {
         TI_Fee_MainFunction();
     }
     TI_Fee_ReadSync(1, 0, e.raw, sizeof(struct EEPROM_data));
 
-    if(e.values.magic != EEPROM_MAGIC)
+    if (e.values.magic != EEPROM_MAGIC)
     {
         return false;
     }
@@ -86,7 +85,6 @@ bool load_e_from_eeprom()
     sensors_data.ac_drv2_data.calibration_current_value = e.values.ac_drv2_calibration_value;
     sensors_data.dc_drv2_data.calibration_current_value = e.values.dc_drv2_calibration_value;
     sensors_data.rear_brake_data.calibration_brake_value = e.values.calibration_brake_value;
-
 
     return true;
 }
@@ -105,10 +103,8 @@ void save_e_to_eeprom(void)
     e.values.ac_drv2_calibration_value = sensors_data.ac_drv2_data.calibration_current_value;
     e.values.dc_drv2_calibration_value = sensors_data.dc_drv2_data.calibration_current_value;
     e.values.calibration_brake_value = sensors_data.rear_brake_data.calibration_brake_value;
-    
 
     TI_Fee_WriteAsync(1, e.raw);
-
     while(TI_Fee_GetStatus(0) != IDLE)
     {
         TI_Fee_MainFunction();
@@ -117,6 +113,13 @@ void save_e_to_eeprom(void)
 
 void init_sensors(void)
 {
+
+    TI_Fee_Init();
+    while (TI_Fee_GetStatus(0) != IDLE)
+    {
+        TI_Fee_MainFunction();
+    }
+
     sensors_data.ac_drv1_data.calibration_current_value = 0;
     sensors_data.dc_drv1_data.calibration_current_value = 0;
     sensors_data.ac_drv2_data.calibration_current_value = 0;
@@ -140,25 +143,22 @@ void init_sensors(void)
 
     sensors_data.rear_brake_data.rear_brake_value = 0;
 
-    //Load calibration values from EEPROM
+    // Load calibration values from EEPROM
     load_e_from_eeprom();
-
 
     init_adc();
     init_freq_measure();
-
 }
-
 
 void send_data_to_serial(void)
 {
     uint16_t start = 0xAA55;
-    sciSend(sciREG, 2, (uint8_t*)&start);
-    sciSend(sciREG, 2, (uint8_t*)&sensors_data.ac_drv1_data.current_value_rms);
-    sciSend(sciREG, 2, (uint8_t*)&sensors_data.dc_drv1_data.current_value_rms);
-    sciSend(sciREG, 2, (uint8_t*)&sensors_data.ac_drv2_data.current_value_rms);
-    sciSend(sciREG, 2, (uint8_t*)&sensors_data.dc_drv2_data.current_value_rms);
-    sciSend(sciREG, 2, (uint8_t*)&sensors_data.rear_brake_data.rear_brake_value);
+    sciSend(sciREG, 2, (uint8_t *)&start);
+    sciSend(sciREG, 2, (uint8_t *)&sensors_data.ac_drv1_data.current_value_rms);
+    sciSend(sciREG, 2, (uint8_t *)&sensors_data.dc_drv1_data.current_value_rms);
+    sciSend(sciREG, 2, (uint8_t *)&sensors_data.ac_drv2_data.current_value_rms);
+    sciSend(sciREG, 2, (uint8_t *)&sensors_data.dc_drv2_data.current_value_rms);
+    sciSend(sciREG, 2, (uint8_t *)&sensors_data.rear_brake_data.rear_brake_value);
 }
 
 void send_data_to_can(void)
@@ -186,14 +186,40 @@ void send_data_to_can(void)
     canTransmit(canREG1, canMESSAGE_BOX3, rear_data);
 }
 
+/* EMA low-pass filter: alpha = 1/2^ADC_FILTER_SHIFT. Higher shift = smoother but slower response */
+#define ADC_FILTER_SHIFT 3u
+
+static uint16_t adc_filtered_value[ADC_NUM_CHANNELS];
+static bool adc_filter_initialized[ADC_NUM_CHANNELS];
+
+static uint16_t filter_adc_channel(adc_id_t ch)
+{
+    uint16_t raw = adc_data[ch].adc_value;
+
+    if (!adc_filter_initialized[ch])
+    {
+        adc_filtered_value[ch] = raw;
+        adc_filter_initialized[ch] = true;
+    }
+    else
+    {
+        adc_filtered_value[ch] = (uint16_t)(adc_filtered_value[ch] +
+            (((int32_t)raw - (int32_t)adc_filtered_value[ch]) >> ADC_FILTER_SHIFT));
+    }
+
+    return adc_filtered_value[ch];
+}
+
 void convert_data(void)
 {
-    //ADC raw value
-    sensors_data.ac_drv1_data.current_vo_raw_value = adc_data[AC_DRV1_CH].adc_value;
-    sensors_data.dc_drv1_data.current_vo_raw_value = adc_data[DC_DRV1_CH].adc_value;
-    sensors_data.ac_drv2_data.current_vo_raw_value = adc_data[AC_DRV2_CH].adc_value;
-    sensors_data.dc_drv2_data.current_vo_raw_value = adc_data[DC_DRV2_CH].adc_value;
-    sensors_data.rear_brake_data.rear_brake_raw_value = adc_data[REAR_BRAKE_CH].adc_value;
+    // ADC raw value (filtered)
+    current_vref_raw_value = filter_adc_channel(VREF_CH);
+    sensors_data.ac_drv1_data.current_vo_raw_value = filter_adc_channel(AC_DRV1_CH);
+    sensors_data.dc_drv1_data.current_vo_raw_value = filter_adc_channel(DC_DRV1_CH);
+    sensors_data.ac_drv2_data.current_vo_raw_value = filter_adc_channel(AC_DRV2_CH);
+    sensors_data.dc_drv2_data.current_vo_raw_value = filter_adc_channel(DC_DRV2_CH);
+    sensors_data.rear_brake_data.rear_brake_raw_value = filter_adc_channel(REAR_BRAKE_CH);
+
 
     // Current Conversion
     sensors_data.ac_drv1_data.current_value_rms = convert_voltage2current(&sensors_data.ac_drv1_data);
@@ -201,11 +227,10 @@ void convert_data(void)
     sensors_data.ac_drv2_data.current_value_rms = convert_voltage2current(&sensors_data.ac_drv2_data);
     sensors_data.dc_drv2_data.current_value_rms = convert_voltage2current(&sensors_data.dc_drv2_data);
 
-    
     // Brake Conversion
-	// P [PSI] = 400*(V - 0.5V)
-	// V = raw_value/4095 * 5.0
-    if(sensors_data.rear_brake_data.rear_brake_raw_value < sensors_data.rear_brake_data.calibration_brake_value)
+    // P [PSI] = 400*(V - 0.5V)
+    // V = raw_value/4095 * 5.0
+    if (sensors_data.rear_brake_data.rear_brake_raw_value < sensors_data.rear_brake_data.calibration_brake_value)
         sensors_data.rear_brake_data.rear_brake_value = 0;
     else
         sensors_data.rear_brake_data.rear_brake_value =
@@ -214,25 +239,30 @@ void convert_data(void)
 
 void process_calibration_command(void)
 {
-    if(calibration_cmd_id == CAL_CMD_NONE)
+    if (calibration_cmd_id == CAL_CMD_NONE)
     {
         return;
     }
 
-    switch(calibration_cmd_id)
+    switch (calibration_cmd_id)
     {
-        case CAL_CMD_TPS_0:
-            sensors_data.rear_brake_data.calibration_brake_value = sensors_data.rear_brake_data.rear_brake_raw_value;
-            break;
-        case CAL_CMD_CURRENT_SENSORS:
-            sensors_data.ac_drv1_data.calibration_current_value = sensors_data.ac_drv1_data.current_vo_raw_value;
-            sensors_data.dc_drv1_data.calibration_current_value = sensors_data.dc_drv1_data.current_vo_raw_value;
-            sensors_data.ac_drv2_data.calibration_current_value = sensors_data.ac_drv2_data.current_vo_raw_value;
-            sensors_data.dc_drv2_data.calibration_current_value = sensors_data.dc_drv2_data.current_vo_raw_value;
-            break;
-        default:
-            return; // Ignore unknown commands
-            break;
+    case CAL_CMD_TPS_0:
+        sensors_data.rear_brake_data.calibration_brake_value = sensors_data.rear_brake_data.rear_brake_raw_value;
+        break;
+    case CAL_CMD_CURRENT_SENSORS:
+        // Store vo - vref (raw ADC counts) so it can be subtracted to zero out the current reading.
+        sensors_data.ac_drv1_data.calibration_current_value =
+            (uint16_t)((int16_t)sensors_data.ac_drv1_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
+        sensors_data.dc_drv1_data.calibration_current_value =
+            (uint16_t)((int16_t)sensors_data.dc_drv1_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
+        sensors_data.ac_drv2_data.calibration_current_value =
+            (uint16_t)((int16_t)sensors_data.ac_drv2_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
+        sensors_data.dc_drv2_data.calibration_current_value =
+            (uint16_t)((int16_t)sensors_data.dc_drv2_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
+        break;
+    default:
+        return; // Ignore unknown commands
+        break;
     }
 
     save_e_to_eeprom();

@@ -96,6 +96,8 @@ extern void rtiCompare2Interrupt(void);
 extern void rtiCompare3Interrupt(void);
 extern void adc1Group0Interrupt(void);
 extern void adc1Group1Interrupt(void);
+extern void can1HighLevelInterrupt(void);
+extern void can1LowLevelInterrupt(void);
 extern void dmaFTCAInterrupt(void);
 extern void sciHighLevelInterrupt(void);
 extern void ecap1Interrupt(void);
@@ -280,7 +282,7 @@ typedef struct vim_config_reg
                                     | (uint32)((uint32)0U << 13U)\
                                     | (uint32)((uint32)1U << 14U)\
                                     | (uint32)((uint32)1U << 15U)\
-                                    | (uint32)((uint32)0U << 16U)\
+                                    | (uint32)((uint32)1U << 16U)\
                                     | (uint32)((uint32)0U << 17U)\
                                     | (uint32)((uint32)0U << 18U)\
                                     | (uint32)((uint32)0U << 19U)\
@@ -293,7 +295,7 @@ typedef struct vim_config_reg
                                     | (uint32)((uint32)0U << 26U)\
                                     | (uint32)((uint32)0U << 27U)\
                                     | (uint32)((uint32)0U << 28U)\
-                                    | (uint32)((uint32)0U << 29U)\
+                                    | (uint32)((uint32)1U << 29U)\
                                     | (uint32)((uint32)0U << 30U)\
                                     | (uint32)((uint32)0U << 31U))
 						

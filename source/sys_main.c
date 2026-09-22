@@ -62,7 +62,7 @@
 #define CLOCK_RTI_HZ 10000000 
 
 // Data conversion and processing frequency
-#define DATA_PROCESS_HZ 250
+#define DATA_PROCESS_HZ 150
 #define DATA_PROCESS_TICKS (CLOCK_RTI_HZ / DATA_PROCESS_HZ)
 
 // CAN and SCI data sending frequency

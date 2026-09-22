@@ -3,11 +3,13 @@
 
 #define VREF_C
 
-#define AC_DRV1_CH ADC1
-#define DC_DRV1_CH ADC2
-#define AC_DRV2_CH ADC3
-#define DC_DRV2_CH ADC4
-#define REAR_BRAKE_CH ADC5
+#define VREF_CH ADC1
+#define AC_DRV1_CH ADC2
+#define DC_DRV1_CH ADC6
+#define AC_DRV2_CH ADC5
+#define DC_DRV2_CH ADC0
+#define REAR_BRAKE_CH ADC7
+
 
 
 // Definimos las constantes del sensor
@@ -21,8 +23,9 @@
 typedef struct
 {
     uint16_t current_vo_raw_value;
-    
+    uint16_t current_vref_raw_value;
     uint16_t calibration_current_value;
+
     uint16_t current_value_rms;
     float current_buffer[SAMPLES];
     uint16_t buffer_index;

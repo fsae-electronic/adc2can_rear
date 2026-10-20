@@ -44,7 +44,8 @@ void dmaConfig_ADC_Event(void)
     g_dmaCTRLPKT.AUTOINIT = AUTOINIT_ON;
 
     dmaSetCtrlPacket(DMA_CH0, g_dmaCTRLPKT);
-    dmaEnableInterrupt(DMA_CH0, FTC);
+    // No DMA interrupt: at ADC_SAMPLE_HZ the FTC interrupt (one per channel) would eat the CPU.
+    // The buffer is read by adc_update_from_dma() from the RTI compare 0 interrupt.
     dmaSetChEnable(DMA_CH0, DMA_HW);
 }
 
@@ -61,6 +62,7 @@ void init_adc(void)
 {
     rtiInit();
     adcInit();
+    adcREG1->EVSAMP = ADC_EV_SAMPLE_CYCLES;
 
     adcCalibration(adcREG1);
     dmaConfig_ADC_Event();
@@ -68,7 +70,7 @@ void init_adc(void)
 
     // RTI Compare 0 --> Hardware trigger to ADC1 Group Event
     // CLOCK RTI = 10MHz --> 10.000.000 ticks --> 1 seg
-    rtiSetPeriod(rtiCOMPARE0, 50000);
+    rtiSetPeriod(rtiCOMPARE0, ADC_RTI_CLOCK_HZ / ADC_SAMPLE_HZ);
     rtiEnableNotification(rtiNOTIFICATION_COMPARE0); /* Enable notification for RTI compare 0 */
     rtiStartCounter(rtiCOUNTER_BLOCK0);
 
@@ -90,6 +92,23 @@ void process_adc_data(void)
             adc_data[i].adc_id = (adc_dma_buffer[i] >> 16U) & 0x1FU;        // Extraer el ID del canal/pin
         }
         conversion_complete = false; // Resetear la bandera
+    }
+}
+
+// Copies the last conversion from the DMA buffer, placing each result by its channel id.
+// Called from the RTI compare 0 interrupt, when the previous conversion is already complete.
+void adc_update_from_dma(void)
+{
+    for (int i = 0; i < ADC_NUM_CHANNELS; i++)
+    {
+        uint32_t result = adc_dma_buffer[i];
+        uint32_t id = (result >> 16U) & 0x1FU;
+
+        if (id < ADC_NUM_CHANNELS)
+        {
+            adc_data[id].adc_value = (uint16_t)(result & 0xFFFU);
+            adc_data[id].adc_id = id;
+        }
     }
 }
 

@@ -83,7 +83,7 @@ void adcInit(void)
     adcREG1->OPMODECR |= 0x80000000U;
 	
     /** - Setup prescaler */
-    adcREG1->CLOCKCR = 1U;
+    adcREG1->CLOCKCR = 3U;
  
     /** - Setup memory boundaries */
     adcREG1->BNDCR  = (uint32)((uint32)8U << 16U) | (8U + 8U);
@@ -95,7 +95,7 @@ void adcInit(void)
     *     - Enable/Disable continuous conversion
     */
     adcREG1->GxMODECR[0U] = (uint32)ADC_12_BIT
-                          | (uint32)0x00000000U
+                          | (uint32)0x00000020U
                           | (uint32)0x00000000U;
 
     /** - Setup event group hardware trigger
@@ -333,7 +333,7 @@ static const uint32 s_adcSelect[2U][3U] =
 /** - s_adcFiFoSize is used as constant table for channel selection */
 static const uint32 s_adcFiFoSize[2U][3U] =
 {
-    {8U,
+    {16U,
     16U,
     16U},
     {16U,

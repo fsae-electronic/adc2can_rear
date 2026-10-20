@@ -33,32 +33,118 @@ struct EEPROM_data
 
 static const uint16_t EEPROM_MAGIC = 0xAAAA;
 
-static uint16_t convert_voltage2current(current_data_t *current_data)
+static uint16_t current_window_count;
+static volatile bool current_window_ready = false;
+
+static void accumulate_current_sample(current_data_t *current_data, adc_id_t ch, int32_t vref)
 {
-    float sum_squares = 0.0f;
-    uint16_t i;
-    uint16_t index;
+    // No filtering here: the phase current must reach the RMS with its full waveform.
+    current_data->current_vo_raw_value = adc_data[ch].adc_value;
 
-    // Raw ADC diff (vo - vref) with calibration offset removed, so current reads 0 when calibrated.
-    int16_t raw_diff = (int16_t)current_data->current_vo_raw_value - (int16_t)current_vref_raw_value
-        - (int16_t)current_data->calibration_current_value;
+    int32_t raw_diff = (int32_t)current_data->current_vo_raw_value - vref;
 
-    float current = (((float)raw_diff / ADC_RESOLUTION) * ADC_VREF * ADC_GAIN) / SENSITIVITY;
+    current_data->sum += raw_diff;
+    current_data->sum_sq += (uint64_t)((int64_t)raw_diff * raw_diff);
+}
 
-    index = (uint16_t)(current_data->buffer_index % SAMPLES);
-    current_data->current_buffer[index] = current;
-    current_data->buffer_index = (uint16_t)((index + 1U) % SAMPLES);
-
-    for (i = 0U; i < SAMPLES; i++)
+static void close_current_window(current_data_t *current_data)
+{
+    // If the previous window was not consumed yet, this one is dropped.
+    if (!current_window_ready)
     {
-        sum_squares += current_data->current_buffer[i] * current_data->current_buffer[i];
+        current_data->ready_sum = current_data->sum;
+        current_data->ready_sum_sq = current_data->sum_sq;
     }
 
-    current = sqrtf(sum_squares / (float)SAMPLES);
+    current_data->sum = 0;
+    current_data->sum_sq = 0U;
+}
 
-    current_data->current_value_rms = (uint16_t)(current + 0.5f);
+// Called from the RTI compare 0 interrupt at ADC_SAMPLE_HZ.
+void sample_currents(void)
+{
+    adc_update_from_dma();
 
-    return current_data->current_value_rms;
+    // vref is DC, its filtered value (updated in convert_data) is used to reduce noise.
+    int32_t vref = (int32_t)current_vref_raw_value;
+
+    accumulate_current_sample(&sensors_data.ac_drv1_data, AC_DRV1_CH, vref);
+    accumulate_current_sample(&sensors_data.dc_drv1_data, DC_DRV1_CH, vref);
+    accumulate_current_sample(&sensors_data.ac_drv2_data, AC_DRV2_CH, vref);
+    accumulate_current_sample(&sensors_data.dc_drv2_data, DC_DRV2_CH, vref);
+
+    current_window_count++;
+    if (current_window_count >= CURRENT_WINDOW_SAMPLES)
+    {
+        close_current_window(&sensors_data.ac_drv1_data);
+        close_current_window(&sensors_data.dc_drv1_data);
+        close_current_window(&sensors_data.ac_drv2_data);
+        close_current_window(&sensors_data.dc_drv2_data);
+
+        current_window_ready = true;
+        current_window_count = 0U;
+    }
+}
+
+// True RMS over the window with the calibration offset removed:
+// sum((d - cal)^2) = sum(d^2) - 2 * cal * sum(d) + N * cal^2
+static uint16_t window_rms_current(current_data_t *current_data)
+{
+    int64_t cal = (int16_t)current_data->calibration_current_value;
+    int64_t n = (int64_t)CURRENT_WINDOW_SAMPLES;
+
+    int64_t sum_sq = (int64_t)current_data->ready_sum_sq - 2 * cal * (int64_t)current_data->ready_sum + n * cal * cal;
+    if (sum_sq < 0)
+    {
+        sum_sq = 0;
+    }
+
+    float current = sqrtf((float)sum_sq / (float)n) * COUNTS_TO_AMPS;
+
+    return (uint16_t)(current + 0.5f);
+}
+
+// Mean over the window with the calibration offset removed. Negative (regen) is clamped to 0
+// because the CAN frame is unsigned.
+static uint16_t window_mean_current(current_data_t *current_data)
+{
+    float mean = ((float)current_data->ready_sum / (float)CURRENT_WINDOW_SAMPLES)
+        - (float)(int16_t)current_data->calibration_current_value;
+
+    float current = mean * COUNTS_TO_AMPS;
+    if (current < 0.0f)
+    {
+        current = 0.0f;
+    }
+
+    return (uint16_t)(current + 0.5f);
+}
+
+static int16_t window_mean_raw(current_data_t *current_data)
+{
+    float mean = (float)current_data->ready_sum / (float)CURRENT_WINDOW_SAMPLES;
+
+    return (int16_t)((mean >= 0.0f) ? (mean + 0.5f) : (mean - 0.5f));
+}
+
+static void update_current_values(void)
+{
+    if (!current_window_ready)
+    {
+        return;
+    }
+
+    sensors_data.ac_drv1_data.current_value_rms = window_rms_current(&sensors_data.ac_drv1_data);
+    sensors_data.ac_drv2_data.current_value_rms = window_rms_current(&sensors_data.ac_drv2_data);
+    sensors_data.dc_drv1_data.current_value_rms = window_mean_current(&sensors_data.dc_drv1_data);
+    sensors_data.dc_drv2_data.current_value_rms = window_mean_current(&sensors_data.dc_drv2_data);
+
+    sensors_data.ac_drv1_data.window_mean_raw = window_mean_raw(&sensors_data.ac_drv1_data);
+    sensors_data.dc_drv1_data.window_mean_raw = window_mean_raw(&sensors_data.dc_drv1_data);
+    sensors_data.ac_drv2_data.window_mean_raw = window_mean_raw(&sensors_data.ac_drv2_data);
+    sensors_data.dc_drv2_data.window_mean_raw = window_mean_raw(&sensors_data.dc_drv2_data);
+
+    current_window_ready = false;
 }
 
 /********************************
@@ -131,10 +217,22 @@ void init_sensors(void)
     sensors_data.ac_drv2_data.current_vo_raw_value = 0;
     sensors_data.dc_drv2_data.current_vo_raw_value = 0;
 
-    sensors_data.ac_drv1_data.buffer_index = 0;
-    sensors_data.dc_drv1_data.buffer_index = 0;
-    sensors_data.ac_drv2_data.buffer_index = 0;
-    sensors_data.dc_drv2_data.buffer_index = 0;
+    sensors_data.ac_drv1_data.sum = 0;
+    sensors_data.dc_drv1_data.sum = 0;
+    sensors_data.ac_drv2_data.sum = 0;
+    sensors_data.dc_drv2_data.sum = 0;
+
+    sensors_data.ac_drv1_data.sum_sq = 0U;
+    sensors_data.dc_drv1_data.sum_sq = 0U;
+    sensors_data.ac_drv2_data.sum_sq = 0U;
+    sensors_data.dc_drv2_data.sum_sq = 0U;
+
+    sensors_data.ac_drv1_data.window_mean_raw = 0;
+    sensors_data.dc_drv1_data.window_mean_raw = 0;
+    sensors_data.ac_drv2_data.window_mean_raw = 0;
+    sensors_data.dc_drv2_data.window_mean_raw = 0;
+
+    current_window_count = 0U;
 
     sensors_data.ac_drv1_data.current_value_rms = 0;
     sensors_data.dc_drv1_data.current_value_rms = 0;
@@ -142,6 +240,10 @@ void init_sensors(void)
     sensors_data.dc_drv2_data.current_value_rms = 0;
 
     sensors_data.rear_brake_data.rear_brake_value = 0;
+
+    sensors_data.rear_brake_data.implausibility_counter = 0;
+    sensors_data.rear_brake_data.implausibility_latched = false;
+    sensors_data.rear_brake_data.implausibility_pending = false;
 
     // Load calibration values from EEPROM
     load_e_from_eeprom();
@@ -210,31 +312,74 @@ static uint16_t filter_adc_channel(adc_id_t ch)
     return adc_filtered_value[ch];
 }
 
+// BSE failure (open/short circuit): raw value below BRAKE_RAW_MIN_CAL_PERCENT of the
+// calibration value or above 4.5 V for more than IMPLAUSIBILITY_TIME_MS. Must be checked
+// on the raw value, the PSI value is clamped to 0.
+// Edge triggered: reported once, re-armed only after the condition clears.
+static void check_brake_implausibility(brake_data_t *brake_data)
+{
+    uint16_t raw = brake_data->rear_brake_raw_value;
+    uint16_t raw_min = (uint16_t)(((uint32_t)brake_data->calibration_brake_value * BRAKE_RAW_MIN_CAL_PERCENT) / 100U);
+
+    if (raw >= raw_min && raw <= BRAKE_RAW_MAX)
+    {
+        brake_data->implausibility_counter = 0;
+        brake_data->implausibility_latched = false;
+        return;
+    }
+
+    if (brake_data->implausibility_counter <= IMPLAUSIBILITY_CYCLES)
+    {
+        brake_data->implausibility_counter++;
+    }
+
+    if (brake_data->implausibility_counter > IMPLAUSIBILITY_CYCLES && !brake_data->implausibility_latched)
+    {
+        brake_data->implausibility_latched = true;
+        brake_data->implausibility_pending = true;
+    }
+}
+
+// 0x401: b0 = TPS implausibility (always 0 on rear), b1 = brake implausibility.
+// Retried every cycle until the mailbox accepts it.
+static void send_implausibility_to_can(void)
+{
+    if (!sensors_data.rear_brake_data.implausibility_pending)
+    {
+        return;
+    }
+
+    uint8_t implausibility_data[8] = {0U};
+    implausibility_data[0] = 0U;
+    implausibility_data[1] = 1U;
+
+    if (canTransmit(canREG1, IMPLAUSIBILITY_MSG_BOX, implausibility_data) != 0U)
+    {
+        sensors_data.rear_brake_data.implausibility_pending = false;
+    }
+}
+
 void convert_data(void)
 {
-    // ADC raw value (filtered)
+    // ADC raw value (filtered). Current channels are not filtered, they are sampled in sample_currents().
     current_vref_raw_value = filter_adc_channel(VREF_CH);
-    sensors_data.ac_drv1_data.current_vo_raw_value = filter_adc_channel(AC_DRV1_CH);
-    sensors_data.dc_drv1_data.current_vo_raw_value = filter_adc_channel(DC_DRV1_CH);
-    sensors_data.ac_drv2_data.current_vo_raw_value = filter_adc_channel(AC_DRV2_CH);
-    sensors_data.dc_drv2_data.current_vo_raw_value = filter_adc_channel(DC_DRV2_CH);
     sensors_data.rear_brake_data.rear_brake_raw_value = filter_adc_channel(REAR_BRAKE_CH);
 
 
-    // Current Conversion
-    sensors_data.ac_drv1_data.current_value_rms = convert_voltage2current(&sensors_data.ac_drv1_data);
-    sensors_data.dc_drv1_data.current_value_rms = convert_voltage2current(&sensors_data.dc_drv1_data);
-    sensors_data.ac_drv2_data.current_value_rms = convert_voltage2current(&sensors_data.ac_drv2_data);
-    sensors_data.dc_drv2_data.current_value_rms = convert_voltage2current(&sensors_data.dc_drv2_data);
+    // Current Conversion (AC: RMS, DC: mean, over the last complete window)
+    update_current_values();
 
     // Brake Conversion
-    // P [PSI] = 400*(V - 0.5V)
-    // V = raw_value/4095 * 5.0
-    if (sensors_data.rear_brake_data.rear_brake_raw_value < sensors_data.rear_brake_data.calibration_brake_value)
+	// P [PSI] = 400*(V - V0), where V0 is the voltage measured at 0 PSI (calibration_brake_value)
+	// V = raw_value/4095 * 5.0
+    if(sensors_data.rear_brake_data.rear_brake_raw_value < sensors_data.rear_brake_data.calibration_brake_value)
         sensors_data.rear_brake_data.rear_brake_value = 0;
     else
         sensors_data.rear_brake_data.rear_brake_value =
-            (uint16_t)(400.0f * ((((float)sensors_data.rear_brake_data.rear_brake_raw_value / 4095.0f) * 5.0f) - 0.5f));
+            (uint16_t)(400.0f * (((float)sensors_data.rear_brake_data.rear_brake_raw_value - (float)sensors_data.rear_brake_data.calibration_brake_value) / 4095.0f * 5.0f));
+
+    check_brake_implausibility(&sensors_data.rear_brake_data);
+    send_implausibility_to_can();
 }
 
 void process_calibration_command(void)
@@ -250,15 +395,12 @@ void process_calibration_command(void)
         sensors_data.rear_brake_data.calibration_brake_value = sensors_data.rear_brake_data.rear_brake_raw_value;
         break;
     case CAL_CMD_CURRENT_SENSORS:
-        // Store vo - vref (raw ADC counts) so it can be subtracted to zero out the current reading.
-        sensors_data.ac_drv1_data.calibration_current_value =
-            (uint16_t)((int16_t)sensors_data.ac_drv1_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
-        sensors_data.dc_drv1_data.calibration_current_value =
-            (uint16_t)((int16_t)sensors_data.dc_drv1_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
-        sensors_data.ac_drv2_data.calibration_current_value =
-            (uint16_t)((int16_t)sensors_data.ac_drv2_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
-        sensors_data.dc_drv2_data.calibration_current_value =
-            (uint16_t)((int16_t)sensors_data.dc_drv2_data.current_vo_raw_value - (int16_t)current_vref_raw_value);
+        // Store the window mean of vo - vref (raw ADC counts) so it can be subtracted to zero out the current reading.
+        // Must be sent with zero current (inverters disabled).
+        sensors_data.ac_drv1_data.calibration_current_value = (uint16_t)sensors_data.ac_drv1_data.window_mean_raw;
+        sensors_data.dc_drv1_data.calibration_current_value = (uint16_t)sensors_data.dc_drv1_data.window_mean_raw;
+        sensors_data.ac_drv2_data.calibration_current_value = (uint16_t)sensors_data.ac_drv2_data.window_mean_raw;
+        sensors_data.dc_drv2_data.calibration_current_value = (uint16_t)sensors_data.dc_drv2_data.window_mean_raw;
         break;
     default:
         return; // Ignore unknown commands

@@ -61,13 +61,17 @@
 
 #define CLOCK_RTI_HZ 10000000 
 
-// Data conversion and processing frequency
-#define DATA_PROCESS_HZ 150
+// Data conversion and processing frequency (DATA_PROCESS_HZ in sensors.h)
 #define DATA_PROCESS_TICKS (CLOCK_RTI_HZ / DATA_PROCESS_HZ)
 
 // CAN and SCI data sending frequency
 #define DATA_SEND_HZ 100
 #define DATA_SEND_TICKS (CLOCK_RTI_HZ / DATA_SEND_HZ)
+
+// Set by the RTI interrupts, run in the main loop so the ADC sampling interrupt
+// (compare 0, ADC_SAMPLE_HZ) is never blocked by SCI/CAN/EEPROM work.
+static volatile bool process_pending = false;
+static volatile bool send_pending = false;
 /* USER CODE END */
 
 /** @fn void main(void)
@@ -93,6 +97,9 @@ int main(void)
 
     init_sensors();
 
+    // Delay to allow sensors to stabilize
+    for(volatile int i = 0; i < 10000000; i++); // Simple delay loop
+
 
     rtiSetPeriod(rtiCOMPARE2, DATA_PROCESS_TICKS);
     rtiEnableNotification(rtiNOTIFICATION_COMPARE2);
@@ -105,7 +112,19 @@ int main(void)
     rtiStartCounter(rtiCOUNTER_BLOCK1);
     while(1)
     {
-        // Main loop can be used for other tasks if needed
+        if (process_pending)
+        {
+            process_pending = false;
+            convert_data();
+            process_calibration_command();
+        }
+
+        if (send_pending)
+        {
+            send_pending = false;
+            send_data_to_serial();
+            send_data_to_can();
+        }
     }
 /* USER CODE END */
 
@@ -116,16 +135,18 @@ int main(void)
 /* USER CODE BEGIN (4) */
 void rtiNotification(uint32 notification)
 {
-    if (notification == rtiNOTIFICATION_COMPARE2)
+    if (notification == rtiNOTIFICATION_COMPARE0)
     {
-        convert_data();
-        process_calibration_command();
+        sample_currents();
+    }
+    else if (notification == rtiNOTIFICATION_COMPARE2)
+    {
+        process_pending = true;
     }
     else if (notification == rtiNOTIFICATION_COMPARE3)
     {
-        send_data_to_serial();
-        send_data_to_can();
-    }   
+        send_pending = true;
+    }
 }
 
 void canMessageNotification(canBASE_t *node, uint32 messageBox)

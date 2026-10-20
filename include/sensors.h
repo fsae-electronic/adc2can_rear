@@ -17,7 +17,25 @@
 #define SENSITIVITY (0.625f / 200.0f) // Sensibilidad (en voltios por amperio)
 #define ADC_VREF 3.3f        // VRef del ADC
 #define ADC_GAIN 1.5f   // Inversa de divisor resistivo
-#define SAMPLES 100          // Cantidad de muestras para el RMS
+#define COUNTS_TO_AMPS ((ADC_VREF * ADC_GAIN) / (ADC_RESOLUTION * SENSITIVITY))
+
+// Current window: sampled at ADC_SAMPLE_HZ, one value (RMS for AC, mean for DC) per window.
+// 1000 samples at 20 kHz = 50 ms, at least 2 electrical periods above 40 Hz.
+#define CURRENT_WINDOW_SAMPLES 1000U
+
+// Data conversion and processing frequency (convert_data() rate)
+#define DATA_PROCESS_HZ 150
+
+// Implausibility detection (reglamento T.4.3.3/4, BSE)
+// Rear brake sensor raw range on 12-bit ADC over 5 V.
+// Low limit is relative to the 0 PSI calibration value (open circuit reads ~0).
+#define BRAKE_RAW_MIN_CAL_PERCENT 25U // Fail below 10 % of calibration_brake_value
+#define BRAKE_RAW_MAX 3686U           // 4.5 V -> 4.5 / 5.0 * 4095
+// Fault must persist more than this time to be confirmed
+#define IMPLAUSIBILITY_TIME_MS 100U
+#define IMPLAUSIBILITY_CYCLES ((IMPLAUSIBILITY_TIME_MS * DATA_PROCESS_HZ + 999U) / 1000U)
+
+#define IMPLAUSIBILITY_MSG_BOX canMESSAGE_BOX4 // TX: 0x401
 
 
 typedef struct
@@ -26,9 +44,15 @@ typedef struct
     uint16_t current_vref_raw_value;
     uint16_t calibration_current_value;
 
-    uint16_t current_value_rms;
-    float current_buffer[SAMPLES];
-    uint16_t buffer_index;
+    uint16_t current_value_rms;  // AC channels: RMS [A]. DC channels: mean [A]
+
+    // Window accumulators of (vo - vref) in ADC counts, written by sample_currents() (ISR)
+    int32_t sum;
+    uint64_t sum_sq;
+    // Last complete window, read by convert_data() while current_window_ready is set
+    int32_t ready_sum;
+    uint64_t ready_sum_sq;
+    int16_t window_mean_raw;     // Mean of (vo - vref) over the last window, used for calibration
 } current_data_t;
 
 typedef struct
@@ -36,6 +60,10 @@ typedef struct
     uint16_t rear_brake_value;
     uint16_t rear_brake_raw_value;
     uint16_t calibration_brake_value;
+
+    uint16_t implausibility_counter; // Consecutive cycles with raw value out of range
+    bool implausibility_latched;     // Fault confirmed and reported, waiting for it to clear
+    bool implausibility_pending;     // 0x401 frame still to be sent
 } brake_data_t;
 
 
@@ -73,4 +101,5 @@ void run_sensors(void);
 void send_data_to_serial(void);
 void send_data_to_can(void);
 void convert_data(void);
+void sample_currents(void);
 void process_calibration_command(void);

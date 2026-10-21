@@ -33,7 +33,8 @@ struct EEPROM_data
 
 static const uint16_t EEPROM_MAGIC = 0xAAAA;
 
-static uint16_t current_window_count;
+static uint16_t current_block_count;
+static uint8_t current_block_index;
 static volatile bool current_window_ready = false;
 
 static void accumulate_current_sample(current_data_t *current_data, adc_id_t ch, int32_t vref)
@@ -47,17 +48,33 @@ static void accumulate_current_sample(current_data_t *current_data, adc_id_t ch,
     current_data->sum_sq += (uint64_t)((int64_t)raw_diff * raw_diff);
 }
 
-static void close_current_window(current_data_t *current_data)
+// Closes the current block into the ring and publishes the sum of the last CURRENT_WINDOW_BLOCKS.
+static void close_current_block(current_data_t *current_data)
 {
-    // If the previous window was not consumed yet, this one is dropped.
-    if (!current_window_ready)
-    {
-        current_data->ready_sum = current_data->sum;
-        current_data->ready_sum_sq = current_data->sum_sq;
-    }
+    uint8_t i;
+    int32_t window_sum = 0;
+    uint64_t window_sum_sq = 0U;
+
+    current_data->block_sum[current_block_index] = current_data->sum;
+    current_data->block_sum_sq[current_block_index] = current_data->sum_sq;
 
     current_data->sum = 0;
     current_data->sum_sq = 0U;
+
+    // If the previous window was not consumed yet, this one is dropped.
+    if (current_window_ready)
+    {
+        return;
+    }
+
+    for (i = 0U; i < CURRENT_WINDOW_BLOCKS; i++)
+    {
+        window_sum += current_data->block_sum[i];
+        window_sum_sq += current_data->block_sum_sq[i];
+    }
+
+    current_data->ready_sum = window_sum;
+    current_data->ready_sum_sq = window_sum_sq;
 }
 
 // Called from the RTI compare 0 interrupt at ADC_SAMPLE_HZ.
@@ -73,16 +90,17 @@ void sample_currents(void)
     accumulate_current_sample(&sensors_data.ac_drv2_data, AC_DRV2_CH, vref);
     accumulate_current_sample(&sensors_data.dc_drv2_data, DC_DRV2_CH, vref);
 
-    current_window_count++;
-    if (current_window_count >= CURRENT_WINDOW_SAMPLES)
+    current_block_count++;
+    if (current_block_count >= CURRENT_BLOCK_SAMPLES)
     {
-        close_current_window(&sensors_data.ac_drv1_data);
-        close_current_window(&sensors_data.dc_drv1_data);
-        close_current_window(&sensors_data.ac_drv2_data);
-        close_current_window(&sensors_data.dc_drv2_data);
+        close_current_block(&sensors_data.ac_drv1_data);
+        close_current_block(&sensors_data.dc_drv1_data);
+        close_current_block(&sensors_data.ac_drv2_data);
+        close_current_block(&sensors_data.dc_drv2_data);
 
         current_window_ready = true;
-        current_window_count = 0U;
+        current_block_count = 0U;
+        current_block_index = (uint8_t)((current_block_index + 1U) % CURRENT_WINDOW_BLOCKS);
     }
 }
 
@@ -104,18 +122,14 @@ static uint16_t window_rms_current(current_data_t *current_data)
     return (uint16_t)(current + 0.5f);
 }
 
-// Mean over the window with the calibration offset removed. Negative (regen) is clamped to 0
-// because the CAN frame is unsigned.
+// Mean over the window with the calibration offset removed, as a magnitude: the CAN frame is
+// unsigned and a sensor on the negative cable (DC_DRV2) reads the current with the opposite sign.
 static uint16_t window_mean_current(current_data_t *current_data)
 {
     float mean = ((float)current_data->ready_sum / (float)CURRENT_WINDOW_SAMPLES)
         - (float)(int16_t)current_data->calibration_current_value;
 
-    float current = mean * COUNTS_TO_AMPS;
-    if (current < 0.0f)
-    {
-        current = 0.0f;
-    }
+    float current = fabsf(mean) * COUNTS_TO_AMPS;
 
     return (uint16_t)(current + 0.5f);
 }
@@ -232,7 +246,21 @@ void init_sensors(void)
     sensors_data.ac_drv2_data.window_mean_raw = 0;
     sensors_data.dc_drv2_data.window_mean_raw = 0;
 
-    current_window_count = 0U;
+    for (uint8_t i = 0U; i < CURRENT_WINDOW_BLOCKS; i++)
+    {
+        sensors_data.ac_drv1_data.block_sum[i] = 0;
+        sensors_data.dc_drv1_data.block_sum[i] = 0;
+        sensors_data.ac_drv2_data.block_sum[i] = 0;
+        sensors_data.dc_drv2_data.block_sum[i] = 0;
+
+        sensors_data.ac_drv1_data.block_sum_sq[i] = 0U;
+        sensors_data.dc_drv1_data.block_sum_sq[i] = 0U;
+        sensors_data.ac_drv2_data.block_sum_sq[i] = 0U;
+        sensors_data.dc_drv2_data.block_sum_sq[i] = 0U;
+    }
+
+    current_block_count = 0U;
+    current_block_index = 0U;
 
     sensors_data.ac_drv1_data.current_value_rms = 0;
     sensors_data.dc_drv1_data.current_value_rms = 0;

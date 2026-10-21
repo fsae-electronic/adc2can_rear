@@ -19,9 +19,13 @@
 #define ADC_GAIN 1.5f   // Inversa de divisor resistivo
 #define COUNTS_TO_AMPS ((ADC_VREF * ADC_GAIN) / (ADC_RESOLUTION * SENSITIVITY))
 
-// Current window: sampled at ADC_SAMPLE_HZ, one value (RMS for AC, mean for DC) per window.
-// 1000 samples at 20 kHz = 50 ms, at least 2 electrical periods above 40 Hz.
-#define CURRENT_WINDOW_SAMPLES 1000U
+// Current window: sampled at ADC_SAMPLE_HZ, sliding over CURRENT_WINDOW_BLOCKS blocks.
+// A new value (RMS for AC, mean for DC) every block: 200 samples at 20 kHz = 10 ms (100 Hz,
+// same as the CAN frame). Window = 2 blocks = 20 ms: short enough to see the launch current peak,
+// one full electrical period above 50 Hz (EMRAX ~300 rpm). Below that the AC value ripples.
+#define CURRENT_BLOCK_SAMPLES 200U
+#define CURRENT_WINDOW_BLOCKS 2U
+#define CURRENT_WINDOW_SAMPLES (CURRENT_BLOCK_SAMPLES * CURRENT_WINDOW_BLOCKS)
 
 // Data conversion and processing frequency (convert_data() rate)
 #define DATA_PROCESS_HZ 150
@@ -46,9 +50,12 @@ typedef struct
 
     uint16_t current_value_rms;  // AC channels: RMS [A]. DC channels: mean [A]
 
-    // Window accumulators of (vo - vref) in ADC counts, written by sample_currents() (ISR)
+    // Block accumulators of (vo - vref) in ADC counts, written by sample_currents() (ISR)
     int32_t sum;
     uint64_t sum_sq;
+    // Last CURRENT_WINDOW_BLOCKS closed blocks (ring), summed into the window
+    int32_t block_sum[CURRENT_WINDOW_BLOCKS];
+    uint64_t block_sum_sq[CURRENT_WINDOW_BLOCKS];
     // Last complete window, read by convert_data() while current_window_ready is set
     int32_t ready_sum;
     uint64_t ready_sum_sq;

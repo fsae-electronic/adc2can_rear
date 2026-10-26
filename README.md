@@ -82,8 +82,8 @@ Solo los comandos `1` y `6` escriben la calibracion en la FEE; el resto se desca
 
 Deteccion en la trasera (reglamento T.4.3.3/4, BSE):
 
-- Falla si `rear_brake_raw_value` queda por debajo del 25 % de `calibration_brake_value` (`BRAKE_RAW_MIN_CAL_PERCENT`, circuito abierto) o por encima de 4.5 V (`BRAKE_RAW_MAX = 3686`, ADC 12 bits sobre 5 V, corto) durante mas de `IMPLAUSIBILITY_TIME_MS = 100 ms`.
-- El limite inferior depende de la calibracion 0 PSI (cmd `1` por `0x600`): sin calibrar (`calibration_brake_value = 0`) solo se detecta el limite superior.
+- Falla si `rear_brake_raw_value` queda por debajo de 0.4 V (`BRAKE_RAW_MIN = 328`, circuito abierto) o por encima de 4.6 V (`BRAKE_RAW_MAX = 3767`, corto), ADC 12 bits sobre 5 V, durante mas de `IMPLAUSIBILITY_TIME_MS = 100 ms`.
+- Los limites son fijos: la calibracion 0 PSI (cmd `1` por `0x600`) solo se usa para convertir a PSI.
 - Se mira el valor raw (filtrado por la EMA del ADC): el valor en PSI esta clampeado a 0 y no permite ver un circuito abierto.
 - La persistencia se cuenta en ciclos de `convert_data()` (`DATA_PROCESS_HZ = 150 Hz`, `IMPLAUSIBILITY_CYCLES = 15`). Si la condicion desaparece antes, el contador se resetea.
 - Por flanco: despues de enviar el frame la placa queda enganchada y se vuelve a armar recien cuando el valor vuelve al rango normal.

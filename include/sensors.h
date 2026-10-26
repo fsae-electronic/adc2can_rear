@@ -32,9 +32,9 @@
 
 // Implausibility detection (reglamento T.4.3.3/4, BSE)
 // Rear brake sensor raw range on 12-bit ADC over 5 V.
-// Low limit is relative to the 0 PSI calibration value (open circuit reads ~0).
-#define BRAKE_RAW_MIN_CAL_PERCENT 25U // Fail below 10 % of calibration_brake_value
-#define BRAKE_RAW_MAX 3686U           // 4.5 V -> 4.5 / 5.0 * 4095
+// Fixed limits, independent of the 0 PSI calibration (open circuit reads ~0).
+#define BRAKE_RAW_MIN 328U            // 0.4 V -> 0.4 / 5.0 * 4095
+#define BRAKE_RAW_MAX 3767U           // 4.6 V -> 4.6 / 5.0 * 4095
 // Fault must persist more than this time to be confirmed
 #define IMPLAUSIBILITY_TIME_MS 100U
 #define IMPLAUSIBILITY_CYCLES ((IMPLAUSIBILITY_TIME_MS * DATA_PROCESS_HZ + 999U) / 1000U)

@@ -340,16 +340,15 @@ static uint16_t filter_adc_channel(adc_id_t ch)
     return adc_filtered_value[ch];
 }
 
-// BSE failure (open/short circuit): raw value below BRAKE_RAW_MIN_CAL_PERCENT of the
-// calibration value or above 4.5 V for more than IMPLAUSIBILITY_TIME_MS. Must be checked
+// BSE failure (open/short circuit): raw value below 0.4 V (BRAKE_RAW_MIN)
+// or above 4.6 V (BRAKE_RAW_MAX) for more than IMPLAUSIBILITY_TIME_MS. Must be checked
 // on the raw value, the PSI value is clamped to 0.
 // Edge triggered: reported once, re-armed only after the condition clears.
 static void check_brake_implausibility(brake_data_t *brake_data)
 {
     uint16_t raw = brake_data->rear_brake_raw_value;
-    uint16_t raw_min = (uint16_t)(((uint32_t)brake_data->calibration_brake_value * BRAKE_RAW_MIN_CAL_PERCENT) / 100U);
 
-    if (raw >= raw_min && raw <= BRAKE_RAW_MAX)
+    if (raw >= BRAKE_RAW_MIN && raw <= BRAKE_RAW_MAX)
     {
         brake_data->implausibility_counter = 0;
         brake_data->implausibility_latched = false;

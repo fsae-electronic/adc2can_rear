@@ -105,6 +105,14 @@ Deteccion en la trasera (reglamento T.4.3.3/4, BSE):
 	- Corriente RMS de 4 canales: `ac_drv1`, `ac_drv2`, `dc_drv1`, `dc_drv2`.
 	- Presion de freno trasero en PSI (segun ecuacion del sensor).
 
+## Watchdog
+
+- Watchdog digital del RTI (DWD) en [source/sys_main.c](source/sys_main.c), con reset del micro al vencer.
+- Vence en ~100 ms (`WATCHDOG_DWD_PRELOAD` 243, con RTICLK = VCLK = 20 MHz). Si se cambia el clock en HALCoGen hay que recalcularlo.
+- El lazo principal lo refresca solo si desde el ultimo refresco corrio la interrupcion de muestreo de corrientes (compare 0) y el propio lazo hizo el procesamiento y el envio. Si una interrupcion o el lazo se cuelgan, o el RTI deja de interrumpir, la placa se resetea.
+- Los bucles de espera de la FEE en [source/sensors.c](source/sensors.c) tambien lo refrescan, porque un borrado o una escritura de flash pueden durar mas que el watchdog.
+- Una vez habilitado no se puede apagar hasta el proximo reset. Para depurar con breakpoints, si el halt resetea la placa, compilar con `WATCHDOG_ENABLE 0`.
+
 ## Resumen corto
 
 - `0x600` (RX, DLC 1): comando de calibracion.

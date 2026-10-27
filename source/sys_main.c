@@ -72,6 +72,20 @@
 // (compare 0, ADC_SAMPLE_HZ) is never blocked by SCI/CAN/EEPROM work.
 static volatile bool process_pending = false;
 static volatile bool send_pending = false;
+
+// Digital watchdog (RTI DWD). Expiration = (preload + 1) * 2^13 / RTICLK, with
+// RTICLK = VCLK = 20 MHz on this board: 243 -> ~100 ms (4095 max). The main loop
+// refreshes it only after the current sampling interrupt (compare 0) ran and the
+// process and send jobs were done in the main loop since the last refresh, so a
+// hung interrupt, a busy-wait or a stopped RTI resets the board. Once enabled it
+// can't be stopped until the next reset: set WATCHDOG_ENABLE to 0 when debugging
+// with breakpoints if the halt resets it.
+#define WATCHDOG_ENABLE 1
+#define WATCHDOG_DWD_PRELOAD 243U
+
+static volatile bool wd_sample_alive = false;
+static bool wd_process_alive = false;
+static bool wd_send_alive = false;
 /* USER CODE END */
 
 /** @fn void main(void)
@@ -110,6 +124,12 @@ int main(void)
 
 
     rtiStartCounter(rtiCOUNTER_BLOCK1);
+
+#if WATCHDOG_ENABLE
+    dwwdInit(Generate_Reset, WATCHDOG_DWD_PRELOAD, Size_100_Percent);
+    dwdCounterEnable();
+#endif
+
     while(1)
     {
         if (process_pending)
@@ -117,6 +137,7 @@ int main(void)
             process_pending = false;
             convert_data();
             process_calibration_command();
+            wd_process_alive = true;
         }
 
         if (send_pending)
@@ -124,6 +145,17 @@ int main(void)
             send_pending = false;
             send_data_to_serial();
             send_data_to_can();
+            wd_send_alive = true;
+        }
+
+        if (wd_sample_alive && wd_process_alive && wd_send_alive)
+        {
+            wd_sample_alive = false;
+            wd_process_alive = false;
+            wd_send_alive = false;
+#if WATCHDOG_ENABLE
+            dwdReset();
+#endif
         }
     }
 /* USER CODE END */
@@ -138,6 +170,7 @@ void rtiNotification(uint32 notification)
     if (notification == rtiNOTIFICATION_COMPARE0)
     {
         sample_currents();
+        wd_sample_alive = true;
     }
     else if (notification == rtiNOTIFICATION_COMPARE2)
     {

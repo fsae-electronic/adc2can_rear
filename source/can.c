@@ -290,7 +290,7 @@ void canInit(void)
                    (uint32)((uint32)(1U - 1U) << 12U) |
                    (uint32)((uint32)((7U + 1U) - 1U) << 8U) |
                    (uint32)((uint32)(1U - 1U) << 6U) |
-                   (uint32)3U;
+                   (uint32)1U;
 
 
      /** - CAN1 Port output values */

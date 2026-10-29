@@ -72,7 +72,7 @@ Solo los comandos `1` y `6` escriben la calibracion en la FEE; el resto se desca
 
 ### `0x401`: Implausibility
 
-`DLC = 8`. Evento, no periodico: se manda una sola vez cuando se confirma la falla.
+`DLC = 8`. Se manda cuando se confirma la falla y despues cada 50 ms (`IMPLAUSIBILITY_REPEAT_MS`) mientras dure. Sin falla no se manda.
 
 | Bytes | Tipo | Significado |
 | --- | --- | --- |
@@ -86,9 +86,9 @@ Deteccion en la trasera (reglamento T.4.3.3/4, BSE):
 - Los limites son fijos: la calibracion 0 PSI (cmd `1` por `0x600`) solo se usa para convertir a PSI.
 - Se mira el valor raw (filtrado por la EMA del ADC): el valor en PSI esta clampeado a 0 y no permite ver un circuito abierto.
 - La persistencia se cuenta en ciclos de `convert_data()` (`DATA_PROCESS_HZ = 150 Hz`, `IMPLAUSIBILITY_CYCLES = 15`). Si la condicion desaparece antes, el contador se resetea.
-- Por flanco: despues de enviar el frame la placa queda enganchada y se vuelve a armar recien cuando el valor vuelve al rango normal.
+- Mientras la falla dura el frame se repite cada `IMPLAUSIBILITY_REPEAT_CYCLES` (8 ciclos, ~53 ms); deja de mandarse cuando el valor vuelve al rango normal.
 - Si el mailbox esta ocupado, el envio se reintenta en el ciclo siguiente.
-- La main ECU, al recibir `B0 != 0` o `B1 != 0`, fuerza drive off (igual que el cmd 8 del `0x600`). No guarda la falla: el auto vuelve a andar con un drive-on nuevo (cmd 7 por `0x600`).
+- La main ECU, al recibir `B0 != 0` o `B1 != 0`, fuerza drive off (igual que el cmd 8 del `0x600`) y rechaza un drive-on nuevo (cmd 7) mientras sigan llegando `0x401` (ultimos 200 ms).
 
 ## Flujo de ejecucion
 
@@ -128,4 +128,4 @@ Misma medicion que el firmware anterior `fsae_current_sense` (placa LPC55S06), q
 - `0x600` (RX, DLC 1): comando de calibracion.
 - `0x503` (TX, DLC 8): corrientes de los cuatro canales (AC RMS, DC ultima muestra).
 - `0x504` (TX, DLC 8): presion de freno trasero.
-- `0x401` (TX, DLC 8, por evento): implausibilidad de freno trasero (`b1 = 1`).
+- `0x401` (TX, DLC 8, cada 50 ms mientras dura la falla): implausibilidad de freno trasero (`b1 = 1`).

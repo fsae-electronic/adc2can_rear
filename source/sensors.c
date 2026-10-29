@@ -368,7 +368,8 @@ static uint16_t filter_adc_channel(adc_id_t ch)
 // BSE failure (open/short circuit): raw value below 0.4 V (BRAKE_RAW_MIN)
 // or above 4.6 V (BRAKE_RAW_MAX) for more than IMPLAUSIBILITY_TIME_MS. Must be checked
 // on the raw value, the PSI value is clamped to 0.
-// Edge triggered: reported once, re-armed only after the condition clears.
+// Reported right away on the confirmation, then every IMPLAUSIBILITY_REPEAT_CYCLES
+// while the fault lasts (send_implausibility_to_can).
 static void check_brake_implausibility(brake_data_t *brake_data)
 {
     uint16_t raw = brake_data->rear_brake_raw_value;
@@ -393,12 +394,26 @@ static void check_brake_implausibility(brake_data_t *brake_data)
 }
 
 // 0x401: b0 = TPS implausibility (always 0 on rear), b1 = brake implausibility.
-// Retried every cycle until the mailbox accepts it.
+// Retried every cycle until the mailbox accepts it, repeated while the fault lasts.
+static uint16_t implausibility_repeat_counter = 0U;
+
 static void send_implausibility_to_can(void)
 {
+    if (!sensors_data.rear_brake_data.implausibility_latched)
+    {
+        sensors_data.rear_brake_data.implausibility_pending = false;
+        implausibility_repeat_counter = 0U;
+        return;
+    }
+
     if (!sensors_data.rear_brake_data.implausibility_pending)
     {
-        return;
+        implausibility_repeat_counter++;
+        if (implausibility_repeat_counter < IMPLAUSIBILITY_REPEAT_CYCLES)
+        {
+            return;
+        }
+        sensors_data.rear_brake_data.implausibility_pending = true;
     }
 
     uint8_t implausibility_data[8] = {0U};
@@ -408,6 +423,7 @@ static void send_implausibility_to_can(void)
     if (canTransmit(canREG1, IMPLAUSIBILITY_MSG_BOX, implausibility_data) != 0U)
     {
         sensors_data.rear_brake_data.implausibility_pending = false;
+        implausibility_repeat_counter = 0U;
     }
 }
 

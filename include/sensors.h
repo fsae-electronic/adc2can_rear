@@ -39,6 +39,10 @@
 // Fault must persist more than this time to be confirmed
 #define IMPLAUSIBILITY_TIME_MS 100U
 #define IMPLAUSIBILITY_CYCLES ((IMPLAUSIBILITY_TIME_MS * DATA_PROCESS_HZ + 999U) / 1000U)
+// 0x401 repeat period while a confirmed fault lasts (the main ECU refuses a new drive-on
+// meanwhile, and a lost frame is covered by the next one)
+#define IMPLAUSIBILITY_REPEAT_MS 50U
+#define IMPLAUSIBILITY_REPEAT_CYCLES ((IMPLAUSIBILITY_REPEAT_MS * DATA_PROCESS_HZ + 999U) / 1000U)
 
 #define IMPLAUSIBILITY_MSG_BOX canMESSAGE_BOX4 // TX: 0x401
 
@@ -79,7 +83,7 @@ typedef struct
     uint16_t calibration_brake_value;
 
     uint16_t implausibility_counter; // Consecutive cycles with raw value out of range
-    bool implausibility_latched;     // Fault confirmed and reported, waiting for it to clear
+    bool implausibility_latched;     // Fault confirmed, 0x401 repeated until it clears
     bool implausibility_pending;     // 0x401 frame still to be sent
 } brake_data_t;
 

@@ -58,8 +58,8 @@ Solo los comandos `1` y `6` escriben la calibracion en la FEE; el resto se desca
 | --- | --- | --- |
 | `B0 (LSB), B1 (MSB)` | `uint16_t` | AC Driver 1 Current RMS |
 | `B2 (LSB), B3 (MSB)` | `uint16_t` | AC Driver 2 Current RMS |
-| `B4 (LSB), B5 (MSB)` | `uint16_t` | DC Driver 1 Current RMS |
-| `B6 (LSB), B7 (MSB)` | `uint16_t` | DC Driver 2 Current RMS |
+| `B4 (LSB), B5 (MSB)` | `uint16_t` | DC Driver 1 Current (ultima muestra, modulo) |
+| `B6 (LSB), B7 (MSB)` | `uint16_t` | DC Driver 2 Current (ultima muestra, modulo) |
 
 ### `0x504`: Rear Data
 
@@ -102,8 +102,18 @@ Deteccion en la trasera (reglamento T.4.3.3/4, BSE):
 - Sensores y calibraciones en [include/sensors.h](include/sensors.h): `sensors_data_t`, `calibration_cmd_id_t`.
 - Logica de conversion y empaquetado CAN en [source/sensors.c](source/sensors.c).
 - Conversores activos:
-	- Corriente RMS de 4 canales: `ac_drv1`, `ac_drv2`, `dc_drv1`, `dc_drv2`.
+	- Corriente de 4 canales: `ac_drv1`, `ac_drv2`, `dc_drv1`, `dc_drv2`.
 	- Presion de freno trasero en PSI (segun ecuacion del sensor).
+
+## Medicion de corriente
+
+Misma medicion que el firmware anterior `fsae_current_sense` (placa LPC55S06), que leia bien la corriente de fase:
+
+- El LPC leia `vo` y `vref` de cada sensor en su `while(1)` (~4 kHz por sensor, con promediado por hardware). Aca lo hace la interrupcion del RTI compare 0 (`sample_currents()`): el ADC convierte los 8 canales a `ADC_SAMPLE_HZ = 16 kHz` y cada `CURRENT_ADC_AVERAGE = 4` conversiones se promedian en una muestra, o sea 4 kHz por sensor.
+- Cada muestra: `vref` corregida con la calibracion (`+cal` si `vo_higher`, `-cal` si `vref_higher`), `I = (vo - vref) * ADC_GAIN / SENSITIVITY` con signo, guardada en un buffer de `SAMPLES = 300` (75 ms). El LPC desplazaba el buffer; aca es un anillo, el RMS/max/min da igual.
+- Cada 10 ms, antes de mandar el `0x503`, se calculan RMS, max y min del buffer (`calculate_current_values()`, igual al LPC). AC manda el RMS; DC manda la ultima muestra en modulo (el frame es `uint16` y DC_DRV2 esta en el cable negativo).
+- Diferencias de hardware con el LPC: ADC de 12 bits (el LPC era de 16) y un divisor a la entrada del ADC (`ADC_GAIN = 1.5`).
+- Calibracion: cmd `6` por `0x600` con corriente cero (inversores deshabilitados). Guarda `vo - vref` de la ultima muestra en la FEE, como el boton del LPC.
 
 ## Watchdog
 
@@ -116,6 +126,6 @@ Deteccion en la trasera (reglamento T.4.3.3/4, BSE):
 ## Resumen corto
 
 - `0x600` (RX, DLC 1): comando de calibracion.
-- `0x503` (TX, DLC 8): corrientes RMS de los cuatro canales.
+- `0x503` (TX, DLC 8): corrientes de los cuatro canales (AC RMS, DC ultima muestra).
 - `0x504` (TX, DLC 8): presion de freno trasero.
-- `0x401` (TX, DLC 8, por evento): implausibilidad de freno trasero (`b1 = 1`).
+- `0x401` (TX, DLC 8, por evento): implausibilidad de freno trasero (`b1 = 1`).

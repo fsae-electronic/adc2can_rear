@@ -19,13 +19,14 @@
 #define ADC_GAIN 1.5f   // Inversa de divisor resistivo
 #define COUNTS_TO_AMPS ((ADC_VREF * ADC_GAIN) / (ADC_RESOLUTION * SENSITIVITY))
 
-// Current window: sampled at ADC_SAMPLE_HZ, sliding over CURRENT_WINDOW_BLOCKS blocks.
-// A new value (RMS for AC, mean for DC) every block: 200 samples at 20 kHz = 10 ms (100 Hz,
-// same as the CAN frame). Window = 2 blocks = 20 ms: short enough to see the launch current peak,
-// one full electrical period above 50 Hz (EMRAX ~300 rpm). Below that the AC value ripples.
-#define CURRENT_BLOCK_SAMPLES 200U
-#define CURRENT_WINDOW_BLOCKS 2U
-#define CURRENT_WINDOW_SAMPLES (CURRENT_BLOCK_SAMPLES * CURRENT_WINDOW_BLOCKS)
+// Current sensing: same measurement as fsae_current_sense (LPC55S06 board).
+// The LPC read vo and vref of each sensor in its while(1) (~4 kHz per sensor, 32x hardware
+// averaging), kept the last SAMPLES currents and, every 10 ms (CAN send), computed RMS/max/min
+// of the buffer. AC sends the RMS, DC sends the last sample.
+// Here: ADC at ADC_SAMPLE_HZ, CURRENT_ADC_AVERAGE conversions averaged per sample.
+#define CURRENT_ADC_AVERAGE 4U                                     // 16 kHz / 4 = 4 kHz per sample
+#define CURRENT_SAMPLE_HZ (ADC_SAMPLE_HZ / CURRENT_ADC_AVERAGE)
+#define SAMPLES 300U                                               // Cantidad de muestras para el RMS (75 ms at 4 kHz)
 
 // Data conversion and processing frequency (convert_data() rate)
 #define DATA_PROCESS_HZ 150
@@ -44,22 +45,31 @@
 
 typedef struct
 {
-    uint16_t current_vo_raw_value;
-    uint16_t current_vref_raw_value;
-    uint16_t calibration_current_value;
+    bool calibration_state;
+    bool vo_higher;
+    bool vref_higher;
 
-    uint16_t current_value_rms;  // AC channels: RMS [A]. DC channels: mean [A]
+    adc_id_t current_port_vo;
 
-    // Block accumulators of (vo - vref) in ADC counts, written by sample_currents() (ISR)
-    int32_t sum;
-    uint64_t sum_sq;
-    // Last CURRENT_WINDOW_BLOCKS closed blocks (ring), summed into the window
-    int32_t block_sum[CURRENT_WINDOW_BLOCKS];
-    uint64_t block_sum_sq[CURRENT_WINDOW_BLOCKS];
-    // Last complete window, read by convert_data() while current_window_ready is set
-    int32_t ready_sum;
-    uint64_t ready_sum_sq;
-    int16_t window_mean_raw;     // Mean of (vo - vref) over the last window, used for calibration
+    uint16_t calibration_value;          // |vo - vref| at zero current, ADC counts
+    uint16_t calibration_current_value;  // Signed (vo - vref) offset as stored in EEPROM
+
+    uint16_t adc_value_vo;               // Averaged ADC counts of the last sample
+    uint16_t adc_value_vref;
+    uint32_t adc_sum_vo;                 // CURRENT_ADC_AVERAGE accumulator (ISR)
+
+    float vo;
+    float vref;
+
+    float current_buffer[SAMPLES];       // Ring of the last SAMPLES currents [A]
+    uint16_t buffer_index;
+
+    float current;                       // Last sample [A]
+    float rms_current;
+    float max_current;
+    float min_current;
+
+    uint16_t current_value_rms;          // Sent on CAN [A]: AC channels RMS, DC channels |last sample|
 } current_data_t;
 
 typedef struct

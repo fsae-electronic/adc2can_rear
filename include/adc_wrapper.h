@@ -5,13 +5,13 @@
 #include <stdbool.h>
 
 
-// RTI counter block 0 clock (RTICLK 20 MHz / (CPUC0 + 1))
+// RTI counter block 0 clock (RTICLK 20 MHz / (CPUC0 + 1), CPUC0 = 1)
 #define ADC_RTI_CLOCK_HZ 10000000U
-// ADC event group trigger rate (RTI compare 0). Phase RMS needs fs >> output frequency
-// (emDrive 150_300/120: 0 to 1.2 kHz).
-#define ADC_SAMPLE_HZ 20000U
+// ADC event group trigger rate (RTI compare 0). Every CURRENT_ADC_AVERAGE conversions are
+// averaged into one current sample (sensors.h), like the LPC55S06 hardware averaging.
+#define ADC_SAMPLE_HZ 16000U
 // Event group sample window: (EVSAMP + 2) ADCLK cycles
-#define ADC_EV_SAMPLE_CYCLES 10U
+#define ADC_EV_SAMPLE_CYCLES 10U // 12 cycles at 10 MHz: 8 channels convert in ~20 us, within the 62.5 us period
 
 typedef enum
 {
